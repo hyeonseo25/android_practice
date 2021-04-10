@@ -1,93 +1,106 @@
-package com.example.myjavaworld;
+package com.app.myjavaworld;
 
-import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.gms.auth.api.signin.GoogleSignIn;
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
-import com.google.android.gms.auth.api.signin.GoogleSignInClient;
-import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.tasks.Task;
-
-import android.content.Intent;
+import android.content.IntentSender;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity implements  View.OnClickListener {
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.plus.Plus;
+import com.google.android.gms.plus.model.people.Person;
 
-    private static final int RC_SIGN_IN = 9001;
-    private static final String TAG = "Oauth2Google";
+public class MainActivity extends AppCompatActivity implements GoogleApiClient.ConnectionCallbacks,GoogleApiClient.OnConnectionFailedListener {
 
-    GoogleSignInClient mGoogleSignInClient;
+    private static final String TAG = "MainActivity";
+    private GoogleApiClient mGoogleApiClient;
+
+    TextView userName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Configure sign-in to request the user's ID, email address, and basic
-        // profile. ID and basic profile are included in DEFAULT_SIGN_IN.
-        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestEmail()
-                .build();
-        // Build a GoogleSignInClient with the options specified by gso.
-        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
-
-        findViewById(R.id.sign_in_button).setOnClickListener(this);
+        userName = (TextView) findViewById(R.id.userName);
     }
 
-    @Override
-    protected void onStart()
-    {
-        super.onStart();
-        // Check for existing Google Sign In account, if the user is already signed in
-        // the GoogleSignInAccount will be non-null.
-        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
-        updateUI(account);
-    }
+    public void mOnClick(View view) {
+        switch (view.getId()) {
+            case R.id.btn_con:
+                Toast.makeText(this, "접속합니다", Toast.LENGTH_SHORT).show();
 
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+                mGoogleApiClient = new GoogleApiClient.Builder(this)
+                        .addConnectionCallbacks(this)
+                        .addOnConnectionFailedListener(this)
+                        .addApi(Plus.API)
+                        .addScope(Plus.SCOPE_PLUS_PROFILE)
+                        .build();
 
-        // Result returned from launching the Intent from GoogleSignInClient.getSignInIntent(...);
-        if (requestCode == RC_SIGN_IN) {
-            // The Task returned from this call is always completed, no need to attach
-            // a listener.
-            Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
-            handleSignInResult(task);
-        }
-    }
+                mGoogleApiClient.connect();
 
-    private void handleSignInResult(Task<GoogleSignInAccount> completedTask) {
-        try {
-            GoogleSignInAccount account = completedTask.getResult(ApiException.class);
-
-            // Signed in successfully, show authenticated UI.
-            updateUI(account);
-        } catch (ApiException e) {
-            // The ApiException status code indicates the detailed failure reason.
-            // Please refer to the GoogleSignInStatusCodes class reference for more information.
-            Log.w(TAG, "signInResult:failed code=" + e.getStatusCode());
-            updateUI(null);
-        }
-    }
-
-    private void updateUI(GoogleSignInAccount account) {
-    }
-
-    @Override
-    public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.sign_in_button:
-                signIn();
                 break;
-            // ...
         }
     }
 
-    private void signIn() {
-        Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-        startActivityForResult(signInIntent, RC_SIGN_IN);
+    @Override
+    public void onConnected(Bundle bundle) {
+        Log.d(TAG, "구글 플레이 연결이 되었습니다.");
+
+        if (!mGoogleApiClient.isConnected() || Plus.PeopleApi.getCurrentPerson(mGoogleApiClient) == null) {
+
+            Log.d(TAG, "onConnected 연결 실패");
+
+        } else {
+            Log.d(TAG, "onConnected 연결 성공");
+
+            Person currentPerson = Plus.PeopleApi.getCurrentPerson(mGoogleApiClient);
+
+            if (currentPerson.hasImage()) {
+
+                Log.d(TAG, "이미지 경로는 : " + currentPerson.getImage().getUrl());
+
+               /* Glide.with(MainActivity.this)
+                        .load(currentPerson.getImage().getUrl())
+                        .into(userphoto);*/
+
+            }
+            if (currentPerson.hasDisplayName()) {
+                Log.d(TAG, "디스플레이 이름 : " + currentPerson.getDisplayName());
+                Log.d(TAG, "디스플레이 아이디는 : " + currentPerson.getId());
+                userName.setText(currentPerson.getDisplayName());
+            }
+
+        }
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+        Log.d(TAG, "연결 에러 " + connectionResult);
+
+        if (connectionResult.hasResolution()) {
+
+            Log.e(TAG,
+                    String.format(
+                            "Connection to Play Services Failed, error: %d, reason: %s",
+                            connectionResult.getErrorCode(),
+                            connectionResult.toString()));
+            try {
+                //이게 핵심?
+                connectionResult.startResolutionForResult(this, 0);
+            } catch (IntentSender.SendIntentException e) {
+                Log.e(TAG, e.toString(), e);
+            }
+        } else {
+            Toast.makeText(getApplicationContext(), "이미 로그인 중", Toast.LENGTH_SHORT).show();
+        }
     }
 }
